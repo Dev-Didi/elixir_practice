@@ -1,0 +1,128 @@
+Functions are divided into modules. These are kind of like packages. For example, the String module that lets us do things like:
+	String.length("hello")
+
+we can make our own modules with the defmodule macro. then, we can define functions for the module with the def keyword. First letter of the module name must be a capital, and the first letter of every function in the module must be in lower case. 
+
+	defmodule Math do 
+		def sum(a,b) do  
+			a + b
+		end
+	end
+
+	Math.sum(1,2)
+	> 3
+
+Compiling files:
+We can write modules into .ex files and that allows us to reuse our modules elsewhere. To compile, make a .ex file, and then for that file, do 
+	elixirc math.ex
+
+this will compile to your favourite binary file format, .beam files!
+
+Recursion:
+Functional language = immutability = no traditional iterative loops in Elixir. So we need to use recurusion. 
+
+
+	def print_multiple(msg, n) when n > 0 do
+		IO.puts(msg)
+		print_multiple(msg, n-1) 
+	end 
+
+	def print_multiple(msg, 0) = :ok
+
+Enumerables:
+Enums provide the concept of enumerables. Lists and maps are both enumerable. The enum module provides large ranges of functions for transforming, sorting, grouping, filtering and retreiving items from enumerable types. You can also use ranges e.g. 1..5 when defining enumerables. 
+
+Enumerable is a "protocol" in elixir, basically an interface. So, lists and maps implement enumerable. Elixir therefore has polymorphism 
+
+Eagerness and laziness:
+All functions in the Enum module are "eager". Most functions expect an enumerable and return a list back. This means that when performing multiple operations with Enum, each operation is going to generate an intermediatelist until we reach a result. This makes it easy to chain instructions together. 
+
+The Pipe Operator:
+the |> symbol is the pipe operator. It takes the output of the LHS and passes it as the first argument to the function on the right hand side. 
+
+	1..100 |> Enum.map(&(&q * 3)) |> Enum.filter(odd?) |> Enum.sum()
+
+Streams:
+Streams allow for lazy operations as an alternative to enums. They are composed enumerables. 
+
+1..100 |> Stream.map(&(&1*3)) |> Stream.filter(odd?) |> Enum.sum 
+
+In this example, 1..100 |> Stream(&(&1 * 3)) actually returns a data type, a stream, not a enumerable value like a list. It just represents the map computation over the range given, but does not perform it. 
+
+Instead of generating intermediate lists, we just produce a series of computations that are only invoked when we pass the underlying stream to the Enum module. 
+Streams have tons of cool functionality built into Elixir, and you're probably better off experimenting as you go.
+
+
+**Processes**
+
+spawn: the basic way to start a process is to use the spawn keyword. 
+	spawn(fn -> 1 + 2 end)
+spawn will return a PID, the identifyer to the process, which we can capture. 
+
+Our main thread itself is a process. if you open iex and type self(), you will get the PID of the main process. 
+
+
+We can send and receive messages with processes using send/2 and receive/1
+
+When a message is sent to a process the message is stored in the process' mailbox. the receive/1 block goes through the current process mailbox searching for a message that matches a given pattern. Usually these patterns are made up of atomic identifiers, for easy matching in some enumerable data strucutre, often keyword lists/maps. 
+
+	receive do 
+		{:hello, msg} -> msg
+		{:world, _msg} -> _msg
+	end
+	
+	send(self(), {:hello,"world"})
+	> "world"
+
+sending messages doesn't block on the sender - they send the message and proceed with their next instructions. 
+If a process is waiting to receive and there are no messages that match against the receive patterns, it will wait. We can set a timeout if we shouldn't wait endlessly:
+	receive do 
+		{:hello,msg} -> msg
+	after
+		1_000 -> "nothing after 1s"
+	end
+
+there is the inspect function which is similar to toString in java (it is designed to make a string representation of a non string data structure). this is useful when trying to find PIDs. 
+
+	parent = self()
+	spawn )fn -> send(parent, {:hello, self()) end) // send a message to the main process with the :hello atom and its own PID
+
+	receive do 
+		{:hello,pid} -> "got hello from #{inspect(pid)}"
+	end
+	> "got hello from #PID<0.48.0>"
+
+
+Let it Crash in elixir:
+Similar to erlang we like processes crashing on their own without taking down the whole system. if a non main process dies, the main process will continue as usuall and you will be notified it failed. 
+to handle killed processes, we link them together with supervisor processes. 
+
+a process can make a link with an existing process using Process.link/1 or make a link with a process it spawns with spawn_link/1. Then, we can catch crashes and define rules on what should be done when this happens (by default, the supervisor will crash also). 
+
+To properly create supervision trees in elixir, we need to use "tasks". Tasks are an abstraction on top of regular ways of spawning processes, that return status messages and PIDs. they also enable asynchrousy within processes. 
+
+
+STATE in Elixir:
+Since elixir is a functional language, it does not have traditional methods of storing state. Processes are the best way of implementing state by making recursive infinite looping processes that listen for messages to update an element of state. 
+
+defmodule KV do
+	def start_link do
+		Task.start_link(fn -> loop(%{}) end)
+	end
+
+	defp loop(map) do
+		receive do
+			{:get, key, caller} ->
+				send (caller, Map.get(map, key))
+				loop(map)
+			{:put, key, value} -> 
+				loop(Map.put(map,ky,value))
+		end
+	end
+end
+
+in the above code, we start with an empty map and then we can send messages to either get values from the map or insert some. When we receive messages for these, we perform the action and call loop again so that we can continue receiving messages. 
+
+We can also register pids ith names, allowing any other process that knows that name to send it messages. This is basically just fucked up oop, where the processes are responsible for a single piece of the machine state, and we can send messages to it from anywhere to manipulate/read that state. And THIS is what makes elixer (and Erlang) so cool. 
+
+Erlang doesn't have data structures that have behavioural traits (even if it does have protocols, which is very OOP), but this ability to abstract state is very close. 
