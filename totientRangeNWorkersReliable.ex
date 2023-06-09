@@ -46,7 +46,7 @@ defmodule TotientRange do
 
   def spawn_watchers(n) do
     watcher_id = String.to_atom(watcher_string(n))
-    Process.register(spawn(TotientRange,watcher,[n,0,0]),watcher_id)
+    Process.register(spawn(TotientRange,:watcher,[n,0,0]),watcher_id)
     send(watcher_id, {:spawn_worker})
     cond do
       n != 1 ->
@@ -62,7 +62,7 @@ defmodule TotientRange do
     send(watcher_id,{:range,lower,upper})
     cond do
       n != 1 ->
-        give_work(:range, upper+1, interval n-1)
+        give_work(:range, upper+1, interval, n-1)
       true ->
         :ok
     end
@@ -70,7 +70,7 @@ defmodule TotientRange do
 
 
   def watcher(n,lower,upper) do
-    process_flag(:trap_exit,true)
+    Process.flag(:trap_exit,true)
     receive do
       :finished ->
         IO.puts("Watcher#{n}: Finished\n", [n])
@@ -92,6 +92,60 @@ defmodule TotientRange do
         send(worker_id,{:range,lower,upper})
 
     end
+  end
 
+  def worker(n) do
+    watcher_pid = String.to_atom(watcher_string(n))
+    link(watcher_pid)
+    receive do
+      {:range, lower, upper} ->
+        IO.puts("worker#{n}: Computing range #{lower} to #{upper}\n")
+        res = sum_totient(lower,upper)
+        server ! {:result, res}
+        String.to_existing_atom(watcher_string(n))
+    end
+  end
+
+  def server(s, us, sums, n) do
+    receive do
+      finished ->
+        start_server()
+      {:range,lower,upper,num_threads} ->
+        IO.puts("Server: started \n")
+        IO.puts("Server: worker request received... \n")
+        us_temp = System.os_time(:microsecond)
+        ms2 = System.convert_time_unit(us_temp,:microsecond,:millisecond)
+        us2 = us_temp - (ms2 * 100)
+        cond do
+          us2 - us < 0 ->
+            ms_start = ms2 - 1
+            us_start = us2 + 1_000_000
+          true ->
+            ms_start = ms2
+            us_start = us2
+        end
+        spawn_watchers(num_threads)
+        dif = upper - lower
+        interval = trunc(dif / num_threads)
+        give_work(:range, lower, interval, num_threads)
+        server(ms_start,us_start, sums, num_threads)
+      {:result, res} ->
+        IO.puts("Server: received sum #{res} \n")
+        new_sums = [res|sums]
+        len_sums = length(new_sums)
+        cond do
+          len_sums == n ->
+            final res = List.foldl(fn (x, sum) -> x + sum end, 0, new_sums)
+            IO.puts("Server: sum of totients: #{final_res} \n")
+            print_elapsed(s,us)
+
+          len_sums < n ->
+            server(s, us, new_sums, n)
+        end
+    end
+  end
+
+  def start_server() do
+    Process.register(spawn(TotientRange,server,[0,0,[],0]),:server)
   end
 end
