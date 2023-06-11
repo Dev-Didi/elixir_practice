@@ -1,4 +1,54 @@
-Functions are divided into modules. These are kind of like packages. For example, the String module that lets us do things like:
+
+
+Elixir Notes:
+
+
+anonymous functions:
+	add = fn x, y -> x + y end
+
+atoms:
+define attoms with :name_of_atom
+atoms can be used like strings:
+	:hello
+	IO.puts(#{:hello} world) --> hello world :ok
+
+
+Functions:
+Functions are defined by theyre name and length of parameters:
+	add/2
+	trunc/1
+
+
+Erlang lists:
+Erland treats strings as lists. We can use this with single quotes: 'hello'. double quotes are bytestrings: "hello"
+
+Lists:
+Lists in elixir can have any type within them. You can get the head with hd(list) and tail with tl(list) (where "list" is a declared list of values)
+
+Tuples: 
+Like lists, can hold any value. Defined with curly braces. 
+Can place values in perticular positions of tuple with put_elm/3 (tuple, position, value) 
+Lists are stored as linked lists, where as tuples are stored in congiuous memory. The size and indexing of tuples is therefore faster. 
+However, adding elements is much longer, since the whole tuple needs to be moved. 
+
+
+boolean operators:
+allows both "and" and "&&". Same with "or"/"||" and "not"/"!"
+There is both "==" and "===" which is more strict on types, e.g. 1.0 == 1 => true, 1.0 === 1 => false.
+
+the match operator:
+'=' is not just equals, it means the match operator. variables on the LHS get assigned the value of the right hand side, but can only be 
+assigned once, and then we match patterns:
+x = 1
+1 = x // this is valid, since both sides are equal and "match" the above case
+x = 2 // error - this doesn't match previous statements
+
+pattern matching:
+we can match multiple variables:
+	{a, b, c} = {:hello, "world", 1}
+	a = :hello, b = "world", c = 1
+If they can't all be matched, it will cause an error
+Also can't match different types:Functions are divided into modules. These are kind of like packages. For example, the String module that lets us do things like:
 	String.length("hello")
 
 we can make our own modules with the defmodule macro. then, we can define functions for the module with the def keyword. First letter of the module name must be a capital, and the first letter of every function in the module must be in lower case. 
