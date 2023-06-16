@@ -46,7 +46,7 @@ defmodule TotientRange do
 
   def spawn_watchers(n) do
     watcher_id = String.to_atom(watcher_string(n))
-    Process.register(spawn(TotientRange,:watcher,[n,0,0]),watcher_id)
+    Process.register(spawn(fn -> watcher(n,0,0) end),watcher_id)
     send(watcher_id, {:spawn_worker})
     cond do
       n != 1 ->
@@ -76,7 +76,7 @@ defmodule TotientRange do
         IO.puts("Watcher#{n}: Finished\n", [n])
       {:spawn_worker} ->
         worker_id = String.to_atom(worker_string(n))
-        Process.register(spawn(TotientRange,:worker,[n]),worker_id)
+        Process.register(spawn(fn -> worker(n) end),worker_id)
         IO.puts("Watcher#{n} watching worker#{n}")
         watcher(n,lower,upper)
 
@@ -85,12 +85,17 @@ defmodule TotientRange do
         send(worker_id,{:range,inc_lower,inc_upper})
         watcher(n,inc_lower,inc_upper)
 
-      {'EXIT',from,reason} ->
-        IO.puts("Watcher#{n}: #{from} killed by #{reason}. Restarting... \n")
-        worker_id = String.to_atom(worker_string(n))
-        Process.register(spawn(TotientRange,:worker,[n]),worker_id)
-        send(worker_id,{:range,lower,upper})
-
+      {:EXIT,from,reason} ->
+        cond do
+          reason == :chaos ->
+            IO.puts("Watcher#{n}: #{inspect from} killed by #{reason}. Restarting... \n")
+            worker_id = String.to_atom(worker_string(n))
+            Process.register(spawn(fn -> worker(n) end ),worker_id)
+            send(worker_id,{:range,lower,upper})
+            watcher(n,lower,upper)
+          true ->
+            :ok
+        end
     end
   end
 
@@ -149,9 +154,37 @@ defmodule TotientRange do
   end
 
   def start_server() do
-    server_pid = spawn(TotientRange,:server,[0, 0, [], 0])
+    server_pid = spawn(fn -> server(0,0,[],0) end)
     IO.puts("server pid: #{inspect server_pid}")
     Process.register(server_pid,:server_proc)
     IO.puts("server started and registered. Should be waiting for message")
+  end
+
+  def worker_chaos(n_workers, n_victims) do
+    Enum.map(Enum.to_list(1..n_victims),
+      fn ( _ )->
+        :timer.sleep(500)
+        worker_num = :rand.uniform(n_workers)
+        IO.puts("Worker chaos killing worker #{worker_num}")
+        worker_pid = Process.whereis(String.to_atom(worker_string(worker_num)))
+        cond do
+          worker_pid == nil ->
+            IO.puts("WorkerChaos: worker #{worker_num} already dead ")
+          true ->
+            Process.exit(worker_pid, :chaos)
+        end
+      end)
+  end
+
+  def test_robust(n_workers,n_victims) do
+    server_pid = Process.whereis(:server_proc)
+    cond do
+      server_pid == nil ->
+        start_server()
+      true ->
+        :ok
+    end
+    send(:server_proc, {:range,1,15000,n_workers})
+    worker_chaos(n_workers,n_victims)
   end
 end
