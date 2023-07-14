@@ -44,8 +44,19 @@ defmodule HelloWeb.Endpoint do
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
 
+  plug :introspect
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
   plug HelloWeb.Router
+
+  def introspect(conn, _opts) do
+    IO.puts """
+    Verb: #{inspect(conn.method)}
+    Host: #{inspect(conn.host)}
+    Headers: #{inspect(conn.req_headers)}
+    """
+
+    conn
+  end
 end
